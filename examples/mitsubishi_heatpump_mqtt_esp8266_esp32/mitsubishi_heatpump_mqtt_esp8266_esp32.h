@@ -1,6 +1,6 @@
 //#define ESP32
 //#define OTA
-//const char* ota_password = "test";
+//const char* ota_password = "<YOUR OTA PASSWORD GOES HERE>";
 
 /* MQTT */
 #define MQTT_SERVER             ""     // MQTT Server IP - Defined through WifiManager.
