@@ -1,4 +1,3 @@
-
 #ifdef ESP32
 #include <WiFi.h>
 #else
@@ -7,6 +6,11 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <HeatPump.h>
+
+//Needed libraries for WifiManager
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>
 
 #include "mitsubishi_heatpump_mqtt_esp8266_esp32.h"
 
@@ -21,8 +25,8 @@
 #endif
 
 // wifi, mqtt and heatpump client instances
-WiFiClient espClient;
-PubSubClient mqtt_client(espClient);
+//WiFiClient espClient;
+//PubSubClient mqtt_client(espClient);
 HeatPump hp;
 unsigned long lastTempSend;
 
@@ -32,27 +36,19 @@ bool _debugMode = true;
 
 
 void setup() {
-  pinMode(redLedPin, OUTPUT);
-  digitalWrite(redLedPin, HIGH);
-  pinMode(blueLedPin, OUTPUT);
-  digitalWrite(blueLedPin, HIGH);
-
-  WiFi.hostname(client_id);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    // wait 500ms, flashing the blue LED to indicate WiFi connecting...
-    digitalWrite(blueLedPin, LOW);
-    delay(250);
-    digitalWrite(blueLedPin, HIGH);
-    delay(250);
+  /* WIFI CONNECTION CONFIGURATION */
+  WiFi.hostname( client_id );
+  wifiManager.setAPCallback(configModeCallback);
+  //wifiManager.addParameter(&c_device_location);
+  wifiManager.addParameter(&c_mqtt_server);
+  wifiManager.addParameter(&c_mqtt_port);
+  wifiManager.addParameter(&c_mqtt_username);
+  wifiManager.addParameter(&c_mqtt_password);
+    
+  if( !wifiManager.autoConnect( client_id ) ) {
+    delay(1000);
+    ESP.reset();
   }
-
-  // startup mqtt connection
-  mqtt_client.setServer(mqtt_server, mqtt_port);
-  mqtt_client.setCallback(mqttCallback);
-  mqttConnect();
 
   // connect to the heatpump. Callbacks first so that the hpPacketDebug callback is available for connect()
   hp.setSettingsChangedCallback(hpSettingsChanged);
@@ -68,6 +64,12 @@ void setup() {
   hp.connect(&Serial);
 
   lastTempSend = millis();
+}
+
+/* WIFI MANAGER CALLBACK */
+void configModeCallback (WiFiManager *myWiFiManager) {
+  //WiFi.softAPIP();
+  should_save_config = true;
 }
 
 void hpSettingsChanged() {
@@ -251,9 +253,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 void mqttConnect() {
   // Loop until we're reconnected
+  String _port = String(c_mqtt_port.getValue());
+  mqtt_client.setServer(c_mqtt_server.getValue(), _port.toInt());
+  mqtt_client.setCallback(mqttCallback);
   while (!mqtt_client.connected()) {
     // Attempt to connect
-    if (mqtt_client.connect(client_id, mqtt_username, mqtt_password)) {
+    if (mqtt_client.connect(client_id, c_mqtt_username.getValue(), c_mqtt_password.getValue()) ) {
       mqtt_client.subscribe(heatpump_set_topic);
       mqtt_client.subscribe(heatpump_debug_set_topic);
     } else {
